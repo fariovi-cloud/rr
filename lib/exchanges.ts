@@ -4,27 +4,29 @@ export type OrderBook = { bids: Level[]; asks: Level[]; symbol?: string };
 export function midFromBook(book: OrderBook) {
   const bestBid = book.bids[0]?.[0];
   const bestAsk = book.asks[0]?.[0];
-  if (!bestBid || !bestAsk) return null;
+  if (bestBid == null || bestAsk == null) return null;
   return (bestBid + bestAsk) / 2;
 }
 
-export function liquidityBandsUSD(book: OrderBook, bands = [1,2,5,10]) {
+export function liquidityBandsUSD(book: OrderBook, bands = [1, 2, 5, 10]) {
   const mid = midFromBook(book);
-  if (!mid) return bands.map(b => ({ band: b, bid_usd: 0, ask_usd: 0, total_usd: 0 }));
+  if (!mid) {
+    return bands.map((b) => ({ band: b, bid_usd: 0, ask_usd: 0, total_usd: 0 }));
+  }
 
-  const res = [] as { band: number; bid_usd: number; ask_usd: number; total_usd: number }[];
+  const res: { band: number; bid_usd: number; ask_usd: number; total_usd: number }[] = [];
   for (const band of bands) {
-    const up = mid * (1 + band/100);
-    const dn = mid * (1 - band/100);
+    const up = mid * (1 + band / 100);
+    const dn = mid * (1 - band / 100);
 
     let askUsd = 0;
-    for (const [p,a] of book.asks) {
+    for (const [p, a] of book.asks) {
       if (p > up) break;
       askUsd += p * a;
     }
 
     let bidUsd = 0;
-    for (const [p,a] of book.bids) {
+    for (const [p, a] of book.bids) {
       if (p < dn) break;
       bidUsd += p * a;
     }
@@ -34,92 +36,129 @@ export function liquidityBandsUSD(book: OrderBook, bands = [1,2,5,10]) {
   return res;
 }
 
-// ==== Биржи ====
+/* ===================== Биржи: публичные стаканы ===================== */
+
 export async function gateBook(): Promise<OrderBook | null> {
-  const pairs = ["RARI_USDT","RARI_USD"];
+  const pairs = ["RARI_USDT", "RARI_USD"];
   for (const pair of pairs) {
     const u = `https://api.gateio.ws/api/v4/spot/order_book?currency_pair=${pair}&limit=200`;
-    const r = await fetch(u, { cache: "no-store"});
+    const r = await fetch(u, { cache: "no-store" });
     if (!r.ok) continue;
     const j = await r.json();
     if (!j.asks || !j.bids) continue;
-    return {
-      asks: j.asks.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>a[0]-b[0]),
-      bids: j.bids.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>b[0]-a[0]),
-      symbol: pair
-    };
+
+    const asks: Level[] = (j.asks as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => a[0] - b[0]);
+
+    const bids: Level[] = (j.bids as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => b[0] - a[0]);
+
+    return { asks, bids, symbol: pair };
   }
   return null;
 }
 
 export async function mexcBook(): Promise<OrderBook | null> {
-  const pairs = ["RARIUSDT","RARIUSD"];
+  const pairs = ["RARIUSDT", "RARIUSD"];
   for (const s of pairs) {
     const u = `https://api.mexc.com/api/v3/depth?symbol=${s}&limit=200`;
-    const r = await fetch(u, { cache: "no-store"});
+    const r = await fetch(u, { cache: "no-store" });
     if (!r.ok) continue;
     const j = await r.json();
     if (!j.asks || !j.bids) continue;
-    return {
-      asks: j.asks.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>a[0]-b[0]),
-      bids: j.bids.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>b[0]-a[0]),
-      symbol: s
-    };
+
+    const asks: Level[] = (j.asks as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => a[0] - b[0]);
+
+    const bids: Level[] = (j.bids as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => b[0] - a[0]);
+
+    return { asks, bids, symbol: s };
   }
   return null;
 }
 
 export async function coinbaseBook(): Promise<OrderBook | null> {
-  const pairs = ["RARI-USD","RARI-USDT"];
+  const pairs = ["RARI-USD", "RARI-USDT"];
   for (const s of pairs) {
     const u = `https://api.exchange.coinbase.com/products/${s}/book?level=2`;
-    const r = await fetch(u, { cache: "no-store"});
+    const r = await fetch(u, { cache: "no-store" });
     if (!r.ok) continue;
     const j = await r.json();
     if (!j.asks || !j.bids) continue;
-    return {
-      asks: j.asks.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>a[0]-b[0]),
-      bids: j.bids.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>b[0]-a[0]),
-      symbol: s
-    };
+
+    const asks: Level[] = (j.asks as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => a[0] - b[0]);
+
+    const bids: Level[] = (j.bids as [string, string][])
+      .map(([p, a]) => [parseFloat(p), parseFloat(a)] as Level)
+      .sort((a: Level, b: Level) => b[0] - a[0]);
+
+    return { asks, bids, symbol: s };
   }
   return null;
 }
 
 export async function krakenBook(): Promise<OrderBook | null> {
-  const pairs = ["RARIUSD","RARIUSDT"];
+  const pairs = ["RARIUSD", "RARIUSDT"];
   for (const p of pairs) {
-    u = `https://api.kraken.com/0/public/Depth?pair=${p}&count=200`;
-    const r = await fetch(u, { cache: "no-store"});
+    const u = `https://api.kraken.com/0/public/Depth?pair=${p}&count=200`;
+    const r = await fetch(u, { cache: "no-store" });
     if (!r.ok) continue;
     const j = await r.json();
     if (j.error?.length) continue;
     const key = Object.keys(j.result || {})[0];
     if (!key) continue;
     const ob = j.result[key];
-    return {
-      asks: ob.asks.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>a[0]-b[0]),
-      bids: ob.bids.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>b[0]-a[0]),
-      symbol: key
-    };
+
+    const asks: Level[] = (ob.asks as [string, string][])
+      .map(([px, am]) => [parseFloat(px), parseFloat(am)] as Level)
+      .sort((a: Level, b: Level) => a[0] - b[0]);
+
+    const bids: Level[] = (ob.bids as [string, string][])
+      .map(([px, am]) => [parseFloat(px), parseFloat(am)] as Level)
+      .sort((a: Level, b: Level) => b[0] - a[0]);
+
+    return { asks, bids, symbol: key };
   }
   return null;
 }
 
 export async function cryptoComBook(): Promise<OrderBook | null> {
-  const pairs = ["RARI_USDT","RARI_USD"];
+  const pairs = ["RARI_USD", "RARI_USDT"];
   for (const p of pairs) {
-    const u = `https://api.crypto.com/v2/public/get-book?instrument_name=${p}&depth=200`;
-    const r = await fetch(u, { cache: "no-store"});
+    try {
+      const tUrl = `https://api.crypto.com/v2/public/get-ticker?instrument_name=${p}`;
+      const tRes = await fetch(tUrl, { cache: "no-store" });
+      if (!tRes.ok) continue;
+      const tJson = await tRes.json();
+      const tData = tJson?.result?.data?.[0];
+      if (!tData) continue;
+    } catch {
+      continue;
+    }
+
+    const u = `https://api.crypto.com/v2/public/get-book?instrument_name=${p}&depth=50`;
+    const r = await fetch(u, { cache: "no-store" });
     if (!r.ok) continue;
     const j = await r.json();
-    const data = j.result?.data?.[0];
+    const data = j?.result?.data?.[0];
     if (!data?.bids || !data?.asks) continue;
-    return {
-      asks: data.asks.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>a[0]-b[0]),
-      bids: data.bids.map((x: [string,string]) => [parseFloat(x[0]), parseFloat(x[1])]).sort((a,b)=>b[0]-a[0]),
-      symbol: p
-    };
+
+    const asks: Level[] = (data.asks as [string, string][])
+      .map(([px, am]) => [parseFloat(px), parseFloat(am)] as Level)
+      .sort((a: Level, b: Level) => a[0] - b[0]);
+
+    const bids: Level[] = (data.bids as [string, string][])
+      .map(([px, am]) => [parseFloat(px), parseFloat(am)] as Level)
+      .sort((a: Level, b: Level) => b[0] - a[0]);
+
+    return { asks, bids, symbol: p };
   }
   return null;
 }
